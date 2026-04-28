@@ -1,0 +1,49 @@
+# D3: very sparse main inference — stress-test tracker bridging (proposed + large force_infer gap).
+
+pipeline:
+  display_preview: false
+  resize_to: [640, 640]
+  sampling_fps: 12.0
+  mode: "motion_gated"
+  force_infer_every_n_frames: 90
+
+motion:
+  enabled: true
+  min_ratio: 0.0015
+  min_ratio_off: 0.0008
+  hold_frames_after_motion: 10
+
+roi:
+  enabled: true
+  person_roi_inference_enabled: true
+  global_inference_in_roi: true
+  person_center_must_be_in_roi: true
+
+model:
+  imgsz: 640
+  roi_imgsz: 320
+  use_half: true
+  auto_backend_resolve: false
+  backend_priority: ["pt"]
+  device: "cpu"
+  enable_person_fallback: true
+
+event_logic:
+  hardhat_confirm_frames: 2
+  hardhat_revoke_frames: 4
+  lock_after_confirm: true
+  no_hardhat_consecutive_frames: 20
+  no_hardhat_seconds_threshold: 2.0
+  cooldown_frames: 90
+  cooldown_seconds: 3.0
+
+tracking:
+  history_len: 12
+  max_area_growth_ratio: 2.0
+  max_width_growth_ratio: 1.5
+  max_height_growth_ratio: 1.5
+  min_iou_if_growth_triggered: 0.10
+  blend_alpha: 0.35
+  transfer_iou_threshold: 0.35
+  max_transfer_gap_frames: 25
+  headlike_dedup_iou: 0.45

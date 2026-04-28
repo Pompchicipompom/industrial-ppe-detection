@@ -1,0 +1,53 @@
+# A3: proposed stack with softer gating (more sensitive violations, fewer missed events at cost of FP risk).
+
+pipeline:
+  display_preview: false
+  resize_to: [640, 640]
+  sampling_fps: 12.0
+  mode: "motion_gated"
+  force_infer_every_n_frames: 30
+
+motion:
+  enabled: true
+  min_ratio: 0.0015
+  min_ratio_off: 0.0008
+  hold_frames_after_motion: 10
+
+roi:
+  enabled: true
+  person_roi_inference_enabled: true
+  global_inference_in_roi: true
+  person_center_must_be_in_roi: true
+
+model:
+  conf_threshold: 0.14
+  person_min_conf: 0.30
+  roi_head_hardhat_conf: 0.08
+  imgsz: 640
+  roi_imgsz: 320
+  use_half: true
+  auto_backend_resolve: false
+  backend_priority: ["pt"]
+  device: "cpu"
+  enable_person_fallback: true
+  person_fallback_conf: 0.18
+
+event_logic:
+  hardhat_confirm_frames: 2
+  hardhat_revoke_frames: 4
+  lock_after_confirm: true
+  no_hardhat_consecutive_frames: 12
+  no_hardhat_seconds_threshold: 1.5
+  cooldown_frames: 60
+  cooldown_seconds: 2.0
+
+tracking:
+  history_len: 10
+  max_area_growth_ratio: 1.9
+  max_width_growth_ratio: 1.45
+  max_height_growth_ratio: 1.45
+  min_iou_if_growth_triggered: 0.12
+  blend_alpha: 0.35
+  transfer_iou_threshold: 0.35
+  max_transfer_gap_frames: 20
+  headlike_dedup_iou: 0.45

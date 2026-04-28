@@ -1,0 +1,55 @@
+# Max-visibility demo: every-frame infer, no motion/ROI gate, raw head/hardhat + conf; person = tracker only.
+# Logs: stderr [viz-debug], [infer-main]. Run:
+#   python main.py --config configs/debug_visual_demo.yaml --no-preview
+
+pipeline:
+  display_preview: false
+  debug_visualization: true
+  debug_log_every: 30
+  sampling_fps: 0.0
+  mode: every_sample
+  force_infer_every_n_frames: 1
+  reuse_tracks_max_gap_frames: 120
+  max_track_stale_frames: 120
+
+motion:
+  enabled: false
+
+roi:
+  enabled: false
+  person_roi_inference_enabled: false
+  global_inference_in_roi: false
+  person_center_must_be_in_roi: false
+
+filters:
+  person_confirmation_mode: "soft"
+  person_high_conf_threshold: 0.55
+  person_min_aspect_ratio: 1.4
+  person_min_confirmed_track_hits: 3
+
+model:
+  conf_threshold: 0.12
+  roi_head_hardhat_conf: 0.08
+  person_fallback_conf: 0.15
+  debug_log_infer: true
+  auto_backend_resolve: true
+  backend_priority: ["openvino", "onnx", "pt"]
+  device: "cpu"
+
+visualization:
+  draw_raw_detections: false
+  draw_tracker_boxes: true
+  draw_person_boxes: true
+  draw_head_hardhat_boxes: true
+  draw_all_main_detections: false
+  draw_detection_confidence_labels: true
+  show_weak_person: false
+  show_violation_banner: false
+  show_violation_dot: false
+
+output:
+  video_path: output_files/debug_demo_processed.mp4
+  events_csv: output_files/debug_demo_events.csv
+  events_jsonl: output_files/debug_demo_events.jsonl
+  metrics_csv: output_files/debug_demo_frame_metrics.csv
+  profile_json: output_files/debug_demo_runtime_profile.json
