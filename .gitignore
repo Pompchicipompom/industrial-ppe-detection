@@ -2,7 +2,12 @@ __pycache__
 .venv
 *.pyc
 .env
+.env.*
 kernel.errors.txt
+.pytest_cache/
+tmp/
+*.log
+*.tmp
 input_files/
 output_files/
 output/
@@ -14,6 +19,7 @@ data/
 models/*.onnx
 models/*.onnx.data
 models/*_openvino_model/*.bin
+models/helmet_vest_repo_best.pt
 ~$*.docx
 ~WRL*.tmp
 hardhat-detection-yolov8/
