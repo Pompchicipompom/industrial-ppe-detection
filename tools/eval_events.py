@@ -12,7 +12,7 @@ from typing import Any
 REQUIRED_GT_COLUMNS = ["video_id", "event_id", "start_frame", "end_frame", "violation_type"]
 REQUIRED_PRED_COLUMNS = ["frame_idx", "event_type"]
 RUN_SUMMARY_REQUIRED_COLUMNS = ["config_name", "video_id", "split", "status", "output_dir"]
-ALLOWED_SPLITS = {"dev", "test", "stress"}
+ALLOWED_SPLITS = {"dev", "test", "stress", "negative"}
 
 
 @dataclass

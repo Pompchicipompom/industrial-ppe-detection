@@ -2,7 +2,7 @@
 
 ## 1. Scope
 
-This protocol defines the **minimum reproducible setup** for upcoming VKR experiments.
+This protocol defines the **minimum reproducible setup** for controlled baseline vs proposed comparisons.
 Wave A creates only the foundation:
 
 - fixed video manifest with splits

@@ -23,7 +23,7 @@ from ppe_monitoring.config import load_config
 
 
 MANIFEST_REQUIRED_COLUMNS = ["video_id", "source_path", "split"]
-ALLOWED_SPLITS = {"dev", "test", "stress"}
+ALLOWED_SPLITS = {"dev", "test", "stress", "negative"}
 SUMMARY_FIELDS = [
     "timestamp_utc",
     "run_group",

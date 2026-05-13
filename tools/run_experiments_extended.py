@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 """
-VKR / extended experiment orchestration: quality ablations, temporal grid, perf sweep,
+Extended experiment orchestration: quality ablations, temporal grid, perf sweep,
 tracking cadence, and demo presets — with merged experiments_summary.csv + short report.
 
 Layout matches run_experiments.py:
@@ -395,9 +395,9 @@ def _best_f1_by_group(summary_rows: list[dict[str, str]]) -> dict[str, tuple[str
     return best
 
 
-def write_vkr_report(path: Path, summary_rows: list[dict[str, str]], matrix_label: str) -> None:
+def write_experiment_report(path: Path, summary_rows: list[dict[str, str]], matrix_label: str) -> None:
     lines: list[str] = []
-    lines.append(f"# VKR experiment report ({path.parent.name})")
+    lines.append(f"# Experiment report ({path.parent.name})")
     lines.append("")
     lines.append(f"- generated_utc: `{utc_now_iso()}`")
     lines.append(f"- matrix: `{matrix_label}`")
@@ -428,7 +428,7 @@ def write_vkr_report(path: Path, summary_rows: list[dict[str, str]], matrix_labe
         if len(bad) > 40:
             lines.append(f"- … ещё {len(bad) - 40} строк(и); см. experiments_summary.csv")
     lines.append("")
-    lines.append("## Рекомендации для текста ВКР (черновик)")
+    lines.append("## Интерпретация для отчёта (черновик)")
     lines.append("")
     lines.append("1. **Video-first (proposed)** обычно бьёт **baseline** по FA/hour за счёт motion+temporal, ценой задержки события.")
     lines.append("2. **ROI** режет ложные срабатывания на фоне вне зоны интереса; без ROI растёт FP на сложных сценах.")
@@ -445,7 +445,7 @@ def write_vkr_report(path: Path, summary_rows: list[dict[str, str]], matrix_labe
 
 
 def parse_args() -> argparse.Namespace:
-    p = argparse.ArgumentParser(description="VKR extended experiments runner + experiments_summary.csv")
+    p = argparse.ArgumentParser(description="Extended experiments runner + experiments_summary.csv")
     p.add_argument("--groups", type=str, default="A", help="Comma list: A,B,C,D,E (or ALL).")
     p.add_argument("--matrix", type=str, choices=("full", "quick"), default="quick", help="B/C grid size.")
     p.add_argument("--manifest", type=str, default="data/video_manifest_e1.csv")
@@ -492,7 +492,7 @@ def main() -> int:
     else:
         groups = {g.strip().upper() for g in raw_groups}
 
-    run_group = rex.sanitize_component(args.run_group.strip() or f"vkr_{datetime.now().strftime('%Y%m%d_%H%M%S')}")
+    run_group = rex.sanitize_component(args.run_group.strip() or f"exp_{datetime.now().strftime('%Y%m%d_%H%M%S')}")
     run_group_dir = experiments_root / run_group
 
     manifest_path = Path(args.manifest)
@@ -627,8 +627,8 @@ def main() -> int:
     srows: list[dict[str, str]] = []
     with summ_path.open("r", encoding="utf-8", newline="") as f:
         srows = list(csv.DictReader(f))
-    write_vkr_report(run_group_dir / "VKR_EXPERIMENT_REPORT.md", srows, matrix_label=args.matrix)
-    print(f"Report: {run_group_dir / 'VKR_EXPERIMENT_REPORT.md'}")
+    write_experiment_report(run_group_dir / "EXPERIMENT_REPORT.md", srows, matrix_label=args.matrix)
+    print(f"Report: {run_group_dir / 'EXPERIMENT_REPORT.md'}")
     return 1 if failed else 0
 
 

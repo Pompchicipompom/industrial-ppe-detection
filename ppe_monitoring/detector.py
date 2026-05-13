@@ -27,6 +27,21 @@ except Exception:
 
 
 class PPEDetector:
+    DEFAULT_CLASS_NAME_ALIASES = {
+        "person": "person",
+        "Person": "person",
+        "head": "head",
+        "hardhat": "hardhat",
+        "helmet": "hardhat",
+        "vest": "vest",
+        "safety vest": "vest",
+        "safety_vest": "vest",
+        "no-safety vest": "no_vest",
+        "no_safety_vest": "no_vest",
+        "no-vest": "no_vest",
+        "no_vest": "no_vest",
+    }
+
     def __init__(self, cfg: dict):
         self.cfg = cfg
         self.model_cfg = cfg["model"]
@@ -74,7 +89,14 @@ class PPEDetector:
         if (not self.binary_enabled) and self.model_cfg.get("enable_person_fallback", True):
             self.fallback_model = YOLO(self.model_cfg["person_fallback_weights_path"], task="detect")
 
-        self.class_ids = self._get_class_ids(self.model.names, binary_enabled=self.binary_enabled)
+        self.class_name_aliases = self._build_class_aliases(
+            self.model_cfg.get("class_name_aliases", {})
+        )
+        self.class_ids = self._get_class_ids(
+            self.model.names,
+            binary_enabled=self.binary_enabled,
+            class_name_aliases=self.class_name_aliases,
+        )
         self.id_to_name = self._build_id_to_name(self.model.names)
         self.binary_with_name = str(self.model_cfg.get("binary_class_with_hardhat", "with_hard_hat")).strip()
         self.binary_without_name = str(self.model_cfg.get("binary_class_without_hardhat", "without_hard_hat")).strip()
@@ -158,19 +180,46 @@ class PPEDetector:
             return {int(k): str(v) for k, v in model_names.items()}
         return {idx: str(name) for idx, name in enumerate(model_names)}
 
+    @classmethod
+    def _build_class_aliases(cls, config_aliases) -> dict[str, str]:
+        aliases = dict(cls.DEFAULT_CLASS_NAME_ALIASES)
+        if isinstance(config_aliases, dict):
+            for raw_name, canonical in config_aliases.items():
+                aliases[str(raw_name)] = str(canonical).strip().lower()
+        return aliases
+
+    def _normalize_class_name(self, model_cls_name: str) -> str:
+        if model_cls_name in self.class_name_aliases:
+            return self.class_name_aliases[model_cls_name]
+        lowered = str(model_cls_name).strip().lower()
+        if lowered in self.class_name_aliases:
+            return self.class_name_aliases[lowered]
+        return lowered
+
     @staticmethod
-    def _get_class_ids(model_names, binary_enabled: bool = False):
+    def _get_class_ids(model_names, binary_enabled: bool = False, class_name_aliases: dict[str, str] | None = None):
         if isinstance(model_names, dict):
-            name_to_id = {str(v): int(k) for k, v in model_names.items()}
+            raw_name_to_id = {str(v): int(k) for k, v in model_names.items()}
         else:
-            name_to_id = {str(name): idx for idx, name in enumerate(model_names)}
+            raw_name_to_id = {str(name): idx for idx, name in enumerate(model_names)}
+        aliases = class_name_aliases or {}
+        name_to_id: dict[str, int] = {}
+        for raw_name, cls_id in raw_name_to_id.items():
+            canonical = aliases.get(raw_name)
+            if canonical is None:
+                canonical = aliases.get(str(raw_name).strip().lower(), str(raw_name).strip().lower())
+            name_to_id.setdefault(str(canonical), int(cls_id))
         if binary_enabled:
-            return {"person": 0, "head": -1, "hardhat": -1}
-        required = ("person", "head", "hardhat")
+            return {"person": 0, "head": -1, "hardhat": -1, "vest": -1, "no_vest": -1}
+        required = ("person", "hardhat")
         missing = [name for name in required if name not in name_to_id]
         if missing:
             raise ValueError(f"Model classes missing required labels: {missing}")
-        return {name: name_to_id[name] for name in required}
+        class_ids = {name: name_to_id[name] for name in required}
+        class_ids["head"] = int(name_to_id.get("head", -1))
+        class_ids["vest"] = int(name_to_id.get("vest", -1))
+        class_ids["no_vest"] = int(name_to_id.get("no_vest", -1))
+        return class_ids
 
     def infer_main(
         self,
@@ -297,8 +346,9 @@ class PPEDetector:
         detections: list[Detection] = []
         for (lx1, ly1, lx2, ly2), cls_id, conf, track_id in zip(xyxy, clss, confs, track_ids):
             cls_id = int(cls_id)
-            cls_name = self.id_to_name.get(cls_id, str(cls_id))
-            if cls_name not in {"person", "head", "hardhat"}:
+            raw_cls_name = self.id_to_name.get(cls_id, str(cls_id))
+            cls_name = self._normalize_class_name(raw_cls_name)
+            if cls_name not in {"person", "head", "hardhat", "vest", "no_vest"}:
                 continue
             gx1, gy1, gx2, gy2 = clip_xyxy_to_frame(
                 float(lx1 + x_offset),
@@ -372,7 +422,7 @@ class PPEDetector:
         frame_h, frame_w = frame_shape[:2]
         detections: list[Detection] = []
         for (lx1, ly1, lx2, ly2), cls_id, conf in zip(xyxy, clss, confs):
-            cls_name = self.id_to_name.get(int(cls_id), str(cls_id))
+            cls_name = self._normalize_class_name(self.id_to_name.get(int(cls_id), str(cls_id)))
             cls_norm = str(cls_name).strip().lower().replace("-", "_")
             state = None
             if cls_norm in self.binary_with_aliases:
@@ -436,10 +486,13 @@ class PPEDetector:
             if person_roi.size == 0:
                 continue
 
+            roi_classes = [cid for cid in (self.class_ids.get("head", -1), self.class_ids.get("hardhat", -1)) if cid >= 0]
+            if not roi_classes:
+                continue
             roi_results = self.roi_model.predict(
                 person_roi,
                 conf=self.model_cfg["roi_head_hardhat_conf"],
-                classes=[self.class_ids["head"], self.class_ids["hardhat"]],
+                classes=roi_classes,
                 imgsz=self.roi_imgsz,
                 verbose=False,
                 **({"device": self.device} if self.device else {}),
@@ -455,7 +508,7 @@ class PPEDetector:
 
             for (bx1, by1, bx2, by2), cls_id, conf in zip(roi_xyxy, roi_clss, roi_confs):
                 cls_id = int(cls_id)
-                cls_name = self.id_to_name.get(cls_id, str(cls_id))
+                cls_name = self._normalize_class_name(self.id_to_name.get(cls_id, str(cls_id)))
                 if cls_name not in {"head", "hardhat"}:
                     continue
                 gx1, gy1, gx2, gy2 = clip_xyxy_to_frame(

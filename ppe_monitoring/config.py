@@ -60,25 +60,31 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "binary_imgsz": 512,
         "binary_class_with_hardhat": "with_hard_hat",
         "binary_class_without_hardhat": "without_hard_hat",
+        # Optional class-name aliases for dataset compatibility (e.g. Construction-PPE).
+        # Mapping form: model_label -> canonical_label ("person"|"head"|"hardhat"|"vest").
+        "class_name_aliases": {
+            "Person": "person",
+            "helmet": "hardhat",
+        },
         # stderr: log class counts after each main-frame infer (verbose).
         "debug_log_infer": False,
     },
     "roi": {
         "enabled": True,
-        "auto_enabled": True,
+        "auto_enabled": False,
         "auto_sample_frames": 48,
         "auto_min_motion_ratio": 0.001,
         "auto_min_roi_size_ratio": 0.50,
         "auto_margin_ratio": 0.15,
         "person_roi_inference_enabled": True,
-        "global_inference_in_roi": False,
-        "person_center_must_be_in_roi": False,
+        "global_inference_in_roi": True,
+        "person_center_must_be_in_roi": True,
         "reject_person_boxes_on_roi_edge": False,
         "person_edge_reject_margin_px": 8,
         "x_ratio": 0.00,
-        "y_ratio": 0.36,
+        "y_ratio": 0.50,
         "w_ratio": 1.00,
-        "h_ratio": 0.46,
+        "h_ratio": 0.50,
         "draw_enabled": False,
         "draw_border": True,
         "draw_label": False,
@@ -138,6 +144,13 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "max_center_shift_ratio_w": 0.65,
         "max_center_shift_ratio_h": 0.50,
         "transfer_iou_threshold": 0.35,
+        "transfer_max_center_shift_ratio_w": 0.55,
+        "transfer_max_center_shift_ratio_h": 0.45,
+        "transfer_match_expand_ratio": 0.25,
+        "transfer_require_area_consistency": True,
+        "transfer_single_person_center_scale": 1.35,
+        "transfer_min_iou_for_center_fallback": 0.0,
+        "transfer_max_area_ratio_jump": 2.2,
         "max_transfer_gap_frames": 20,
         "headlike_dedup_iou": 0.45,
         "min_track_hits_for_valid_person": 3,
@@ -150,9 +163,12 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "lock_after_confirm": True,
         "no_hardhat_consecutive_frames": 20,  # Temporal smoothing K.
         "no_hardhat_seconds_threshold": 2.0,  # Time threshold for industrial semantics.
+        "no_vest_consecutive_frames": 12,
+        "no_vest_seconds_threshold": 1.5,
         "cooldown_frames": 90,
         "cooldown_seconds": 3.0,
         "max_no_hardhat_hold_frames_without_infer": 4,
+        "max_no_vest_hold_frames_without_infer": 4,
     },
     "visualization": {
         # Main person boxes from tracker (thick).
@@ -171,12 +187,17 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "show_violation_banner": True,
         "show_violation_dot": True,
         "violation_text": "Нарушение: нет каски",
+        "panel_attention_text": "Внимание",
+        "panel_attention_sticky": True,
+        "panel_blink_period_frames": 14,
         "dot_radius": 8,
         "dot_blink_period_frames": 14,
         "bbox_thickness": 2,
         "person_color": (255, 0, 0),
         "head_color": (0, 255, 255),
         "hardhat_color": (0, 255, 0),
+        "vest_color": (255, 255, 0),
+        "no_vest_color": (0, 165, 255),
         "violation_color": (0, 0, 255),
         "text_color": (255, 255, 255),
         "hide_panel_when_idle": False,
@@ -187,6 +208,12 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "person_ttl_frames": 12,
         "person_visual_ttl_frames": 1,
         "bbox_smoothing_match_iou": 0.20,
+        # Keep violation color when Ultralytics changes track_id but bbox overlaps recent violator.
+        "violation_spatial_inherit_enabled": True,
+        "violation_spatial_anchor_ttl_frames": 150,
+        "violation_spatial_iou_min": 0.12,
+        "violation_spatial_expand_ratio": 0.35,
+        "violation_spatial_max_anchors": 50,
     },
     "output": {
         "video_path": "output_files/processed.mp4",
@@ -272,5 +299,10 @@ def load_config(config_path: str | None = None, overrides: dict[str, Any] | None
         _deep_update(cfg, user_cfg)
     if overrides:
         _deep_update(cfg, overrides)
+    # Backward-compatible alias: allow model.model_path in external YAML.
+    model_cfg = cfg.get("model", {})
+    model_path = str(model_cfg.get("model_path", "") or "").strip()
+    if model_path:
+        model_cfg["weights_path"] = model_path
     validate_config(cfg)
     return cfg

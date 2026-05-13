@@ -165,27 +165,126 @@ class PersonTracker:
             py2 * (1.0 - alpha) + cy2 * alpha,
         )
 
+    @staticmethod
+    def _expand_box_xyxy_for_match(
+        box: tuple[float, float, float, float],
+        expand_ratio: float,
+        frame_w: int,
+        frame_h: int,
+    ) -> tuple[float, float, float, float]:
+        """Inflate box for association under occlusion (partial overlap with foreground objects)."""
+        x1, y1, x2, y2 = box
+        w = max(1e-6, x2 - x1)
+        h = max(1e-6, y2 - y1)
+        pad_x = w * expand_ratio * 0.5
+        pad_y = h * expand_ratio * 0.5
+        nx1 = max(0.0, x1 - pad_x)
+        ny1 = max(0.0, y1 - pad_y)
+        nx2 = min(float(frame_w), x2 + pad_x)
+        ny2 = min(float(frame_h), y2 + pad_y)
+        return (nx1, ny1, nx2, ny2)
+
     def _match_existing_person_id(
         self,
         candidate_box: tuple[float, float, float, float],
         used_ids: set[int],
         frame_idx: int,
+        frame_w: int,
+        frame_h: int,
+        single_person_frame: bool = False,
     ) -> int:
         best_id = None
         best_iou = 0.0
+        best_center_ok = False
         max_gap = int(self.tracking_cfg["max_transfer_gap_frames"])
+        iou_th = float(self.tracking_cfg["transfer_iou_threshold"])
+        transfer_max_cx = float(self.tracking_cfg.get("transfer_max_center_shift_ratio_w", 0.55))
+        transfer_max_cy = float(self.tracking_cfg.get("transfer_max_center_shift_ratio_h", 0.45))
+        single_scale = float(self.tracking_cfg.get("transfer_single_person_center_scale", 1.35))
+        if single_person_frame:
+            transfer_max_cx *= single_scale
+            transfer_max_cy *= single_scale
+        min_iou_for_center_fallback = float(self.tracking_cfg.get("transfer_min_iou_for_center_fallback", 0.0))
+        max_area_ratio_jump = float(self.tracking_cfg.get("transfer_max_area_ratio_jump", 2.2))
+        require_area = bool(self.tracking_cfg.get("transfer_require_area_consistency", True)) and not single_person_frame
+        expand_ratio = float(self.tracking_cfg.get("transfer_match_expand_ratio", 0.25))
+        cx1, cy1 = box_center(candidate_box)
+        cw = max(1e-6, candidate_box[2] - candidate_box[0])
+        ch = max(1e-6, candidate_box[3] - candidate_box[1])
+        c_area = cw * ch
         for old_id, old_box in self.last_box_xyxy.items():
             if old_id in used_ids:
                 continue
             if (frame_idx - self.last_seen_frame.get(old_id, -10**9)) > max_gap:
                 continue
-            iou = bbox_iou(candidate_box, old_box)
+            old_expanded = self._expand_box_xyxy_for_match(old_box, expand_ratio, frame_w, frame_h)
+            iou = max(
+                bbox_iou(candidate_box, old_box),
+                bbox_iou(candidate_box, old_expanded),
+            )
+            ox1, oy1 = box_center(old_box)
+            ow = max(1e-6, old_box[2] - old_box[0])
+            oh = max(1e-6, old_box[3] - old_box[1])
+            o_area = ow * oh
+            shift_w = abs(cx1 - ox1) / max(ow, cw)
+            shift_h = abs(cy1 - oy1) / max(oh, ch)
+            area_jump = c_area / max(1e-6, o_area)
+            area_ok = (
+                area_jump <= max_area_ratio_jump
+                and (1.0 / max_area_ratio_jump) <= area_jump
+            )
+            center_ok = shift_w <= transfer_max_cx and shift_h <= transfer_max_cy
+            if require_area:
+                center_ok = center_ok and area_ok
             if iou > best_iou:
                 best_iou = iou
                 best_id = old_id
-        if best_id is not None and best_iou >= float(self.tracking_cfg["transfer_iou_threshold"]):
+                best_center_ok = center_ok
+            elif iou == best_iou and center_ok and not best_center_ok:
+                best_id = old_id
+                best_center_ok = center_ok
+        if best_id is None:
+            return self._new_synthetic_track_id()
+        if best_iou >= iou_th:
+            return int(best_id)
+        # Fast motion: IoU can drop to ~0 while center stays close to previous box.
+        if best_center_ok and best_iou >= min_iou_for_center_fallback:
             return int(best_id)
         return self._new_synthetic_track_id()
+
+    def _resolve_track_id(
+        self,
+        det_track_id: int | None,
+        candidate_box: tuple[float, float, float, float],
+        used_ids: set[int],
+        frame_idx: int,
+        frame_w: int,
+        frame_h: int,
+        single_person_frame: bool = False,
+    ) -> int:
+        """Resolve stable person id and recover from detector ID switches."""
+        if det_track_id is None:
+            return self._match_existing_person_id(
+                candidate_box, used_ids, frame_idx, frame_w, frame_h, single_person_frame
+            )
+
+        incoming_id = int(det_track_id)
+        incoming_recent = (frame_idx - self.last_seen_frame.get(incoming_id, -10**9)) <= int(
+            self.tracking_cfg["max_transfer_gap_frames"]
+        )
+        if incoming_recent and incoming_id not in used_ids:
+            return incoming_id
+
+        # If detector emitted a new/unstable id, try to continue the closest recent track.
+        matched_existing = self._match_existing_person_id(
+            candidate_box, used_ids, frame_idx, frame_w, frame_h, single_person_frame
+        )
+        if matched_existing < 0:
+            # _match_existing_person_id returns synthetic negative id when no match.
+            if incoming_id not in used_ids:
+                return incoming_id
+            return matched_existing
+        return matched_existing
 
     def update_person_tracks(
         self,
@@ -199,6 +298,7 @@ class PersonTracker:
         used_ids: set[int] = set()
         stats: dict[str, int] = defaultdict(int)
 
+        valid_entries: list[tuple[Detection, tuple[float, float, float, float]]] = []
         for det in detections:
             if det.cls_name != "person":
                 continue
@@ -227,11 +327,14 @@ class PersonTracker:
                 if not valid:
                     stats[f"dropped_{reason}"] += 1
                     continue
+            valid_entries.append((det, box))
 
-            if det.track_id is None:
-                track_id = self._match_existing_person_id(box, used_ids, frame_idx)
-            else:
-                track_id = int(det.track_id)
+        single_person_frame = len(valid_entries) == 1
+
+        for det, box in valid_entries:
+            track_id = self._resolve_track_id(
+                det.track_id, box, used_ids, frame_idx, frame_w, frame_h, single_person_frame
+            )
             if track_id in used_ids:
                 track_id = self._new_synthetic_track_id()
             used_ids.add(track_id)

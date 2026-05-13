@@ -1,0 +1,30 @@
+{
+  "generated_at_utc": "2026-05-11T12:03:14.792973+00:00",
+  "run_group": "one_video_e2",
+  "run_group_dir": "(not stored in public repository)",
+  "analysis_dir": "docs/experiments/single_video_ablation",
+  "evaluation_subdir": "evaluation_ablation",
+  "analysis_subdir": "ablation_analysis",
+  "manifest": "examples/video_manifest_one.csv",
+  "max_frames": 500,
+  "warmup_frames": 20,
+  "steady_min_frames": 30,
+  "gt_dir": "data/gt_events",
+  "tolerance_frames": 0,
+  "configs": [
+    {"name": "baseline", "path": "configs/baseline.yaml"},
+    {"name": "proposed", "path": "configs/proposed.yaml"},
+    {"name": "proposed_without_motion", "path": "configs/ablation_proposed_without_motion.yaml"},
+    {"name": "proposed_without_roi", "path": "configs/ablation_proposed_without_roi.yaml"},
+    {"name": "proposed_without_temporal", "path": "configs/ablation_proposed_without_temporal.yaml"},
+    {"name": "proposed_without_fallback", "path": "configs/ablation_proposed_without_fallback.yaml"}
+  ],
+  "run_experiments_rc": 0,
+  "eval_events_rc": 0,
+  "ablation_results_csv": "docs/experiments/single_video_ablation/ablation_results.csv",
+  "stage_timing_summary_csv": "docs/experiments/single_video_ablation/stage_timing_summary.csv",
+  "warmup_steady_summary_csv": "docs/experiments/single_video_ablation/warmup_steady_summary.csv",
+  "performance_report_md": "docs/experiments/single_video_ablation/performance_report.md",
+  "experiment_summary_md": "docs/experiments/single_video_ablation/experiment_summary.md",
+  "quality_available": true
+}

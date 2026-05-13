@@ -1,4 +1,4 @@
-# Proposed preset for VKR comparisons.
+# Proposed preset for ablation / baseline-vs-proposed comparisons.
 # Pins core industrial video-first switches while inheriting remaining defaults.
 
 pipeline:

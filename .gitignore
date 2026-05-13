@@ -1,25 +1,92 @@
-__pycache__
-.venv
-*.pyc
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+.eggs/
+dist/
+build/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+
+# Secrets / local env
 .env
 .env.*
-kernel.errors.txt
-.pytest_cache/
-tmp/
+!.env.example
+
+# IDE / OS
+.idea/
+.vscode/
+*.swp
+*~
+.DS_Store
+Thumbs.db
+
+# Logs and temp
 *.log
 *.tmp
-input_files/
-output_files/
+*.bak
+tmp/
+kernel.errors.txt
+
+# Large / local artifacts (keep small docs under docs/figures if needed)
+outputs/
 output/
+output_files/
 runs/
 results/
-videos/
+experiments/**/processed*.mp4
+experiments/**/processed.mp4
+wandb/
+mlruns/
+
+# Archives
+*.rar
+*.zip
+*.7z
+
+# Media (place samples via Git LFS or release if needed)
+*.mp4
+*.avi
+*.mov
+*.mkv
+!docs/figures/**/*.png
+!docs/figures/**/*.jpg
+!docs/figures/**/*.jpeg
+!docs/figures/**/*.svg
+
+# Models / export formats
+*.pt
+*.pth
+*.onnx
+*.engine
+*.blob
+*.xml
+*.bin
+models/*
+!models/README.md
+
+# Data directories (README only in repo)
+/data/**
+!/data/README.md
+!/data/**/README.md
+
+# Local datasets
 datasets/
-data/
-models/*.onnx
-models/*.onnx.data
-models/*_openvino_model/*.bin
-models/helmet_vest_repo_best.pt
+
+# Root-level downloaded weights (Ultralytics auto-download)
+/yolov8*.pt
+
+# Legacy / tooling noise
 ~$*.docx
 ~WRL*.tmp
 hardhat-detection-yolov8/

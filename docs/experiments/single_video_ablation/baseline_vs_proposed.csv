@@ -1,0 +1,10 @@
+﻿metric,baseline,proposed,delta_proposed_minus_baseline
+videos_evaluated,1,2,1.000000
+tp_total,1,0,-1.000000
+fp_total,209,6,-203.000000
+fn_total,0,2,2.000000
+precision,0.004762,0.000000,-0.004762
+recall,1.000000,0.000000,-1.000000
+f1,0.009479,0.000000,-0.009479
+false_alarms_per_hour,113313.253012,1626.506024,-111686.746988
+mean_detection_delay_sec,0.560000,,

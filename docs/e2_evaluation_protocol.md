@@ -64,9 +64,9 @@ For comparable latency across the six configs on one machine, presets under `con
 
 - `model.auto_backend_resolve: false` — always load the `.pt` at `model.weights_path`; no silent switch to OpenVINO/ONNX/TensorRT even if those artifacts exist beside the checkpoint.
 - `model.backend_priority: ["pt"]` — documents intent (used when auto-resolve is enabled elsewhere).
-- `model.device: "cpu"` — fixed execution device for stable E2 numbers; on a dedicated CUDA workstation you may set `device: "0"` **once** and keep it fixed for the whole thesis run.
+- `model.device: "cpu"` — fixed execution device for stable E2 numbers; on a dedicated CUDA workstation you may set `device: "0"` **once** and keep it fixed for the whole study.
 
-Keeping `auto_backend_resolve: true` would be valid for deployment (pick the fastest present artifact) but is **unsuitable** for thesis-grade latency ablations because two runs could use different backends without an explicit config change.
+Keeping `auto_backend_resolve: true` would be valid for deployment (pick the fastest present artifact) but is **unsuitable** for reproducible latency ablations because two runs could use different backends without an explicit config change.
 
 ## Preflight
 

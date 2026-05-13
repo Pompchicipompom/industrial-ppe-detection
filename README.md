@@ -1,159 +1,134 @@
-﻿# Система видеоаналитики СИЗ для промышленного видеонаблюдения
+﻿# Video-based PPE compliance monitoring
 
-## Цель проекта
+Industrial-style **video-first** pipeline for hard-hat (and optional high-visibility vest) monitoring on file, camera, or RTSP sources. The system turns per-frame detections into **time-stabilised violation events** (`no_hardhat`, optionally `no_vest`) with CSV/JSONL exports and lightweight runtime profiling.
 
-Проект реализует промышленный пайплайн видеоаналитики СИЗ (PPE), а не только запуск YOLO-детектора на кадре.  
-Система обрабатывает потоковое видео, отслеживает людей во времени, формирует подтвержденные события нарушений и экспортирует артефакты для интеграции с внешними системами уведомлений.
+## Features
 
-## Ключевые возможности
+- Video-first processing loop with configurable frame sampling.
+- Motion-based inference gating for fixed-camera scenes.
+- YOLO (Ultralytics) object detection with optional COCO-style **person fallback** detector.
+- Person tracking and association between `person`, `head`, `hardhat`, and optional `vest`.
+- Temporal event logic plus cooldown-style anti-spam for repeated alerts.
+- Structured logs: `events.csv`, `events.jsonl`, `frame_metrics.csv`, `runtime_profile.json`.
+- Event-level evaluation and ablation tooling (`tools/eval_events.py`, `tools/run_ablation.py`, `tools/run_experiments_extended.py`).
 
-| Направление | Что реализовано |
+## Architecture
+
+High-level data path:
+
+**video source → decode/resize → sampling + motion gate → (optional ROI) → YOLO + tracking → head/hardhat association → temporal event logic → annotated video + metrics/events.**
+
+Details and a module map: [`docs/architecture.md`](docs/architecture.md).
+
+## Repository layout
+
+| Path | Description |
 | --- | --- |
-| Источники видео | Файл, локальная камера, RTSP-поток |
-| Детекция классов | `person`, `head`, `hardhat`, опционально `vest` |
-| Оптимизация нагрузки | Sampling по целевому FPS, motion gating для статичных сцен |
-| Контекст анализа | ROI-фильтрация по рабочей зоне |
-| Трекинг и ассоциация | Tracking человека + связь `person`-`head`-`hardhat` (и `vest`, если включен) |
-| Логика событий | Temporal event logic для `no_hardhat` / `no_vest` |
-| Антиспам событий | Подавление повторных срабатываний (cooldown per person) |
-| Наблюдаемость | Профилирование `FPS` / `latency` и экспорт метрик |
+| `main.py` | CLI entrypoint. |
+| `ppe_monitoring/` | Core pipeline, detector wrapper, tracker, motion, events, profiling, visualisation. |
+| `configs/` | YAML presets (`baseline`, `proposed`, ablations, extended demos). |
+| `tools/` | Ablation runner, evaluation, benchmarks, dataset helpers. |
+| `docs/` | Architecture, protocols, evaluation notes, archived small experiment tables. |
+| `examples/` | Sample config, manifest, and GT snippets. |
+| `models/` | Placeholder `README.md`; place large `.pt` weights locally (see below). |
+| `data/` | Placeholder `README.md`; place manifests and GT CSVs locally. |
 
-## Архитектура пайплайна
+Generated outputs should go under `output_files/` or another path configured in YAML — these directories are git-ignored by default.
 
-1. **Захват кадра** из видеофайла, камеры или RTSP.
-2. **Sampling и motion gating** уменьшают количество кадров, отправляемых в инференс.
-3. **ROI** отбрасывает нерелевантные области и снижает шум детекций.
-4. **Детекция объектов** (`person`, `head`, `hardhat`, опционально `vest`).
-5. **Tracking** стабилизирует идентификаторы людей между кадрами.
-6. **Ассоциация человек-голова-каска/жилет** формирует контекст СИЗ на уровне человека.
-7. **Temporal event logic** подтверждает нарушение по времени/последовательности.
-8. **Cooldown-логика** подавляет повторные события для одного и того же нарушения.
-9. **Экспорт артефактов** для аналитики и интеграций.
+## Requirements
 
-## Основные модули
+- **Python 3.11** (aligned with project docs; slightly older 3.10+ may work with dependency pins adjusted locally).
+- A virtual environment is recommended.
 
-| Модуль | Назначение |
-| --- | --- |
-| `main.py` | Точка входа CLI |
-| `ppe_monitoring/pipeline.py` | Оркестрация полного runtime-процесса |
-| `ppe_monitoring/config.py` | Значения по умолчанию + загрузка YAML/JSON |
-| `ppe_monitoring/detector.py` | Обертка над инференсом Ultralytics |
-| `ppe_monitoring/tracker.py` | Трекинг людей и ассоциация детекций |
-| `ppe_monitoring/event_logic.py` | Temporal-правила событий и cooldown |
-| `ppe_monitoring/motion.py` | Motion gating и параметры чувствительности |
-| `ppe_monitoring/profiler.py` | Сбор FPS/latency-профиля |
-| `ppe_monitoring/visualization.py` | Визуализация и оверлеи на кадре |
-| `docs/` | Архитектура, протоколы оценки, инструкции |
-
-## Используемые технологии
-
-- Python 3.11
-- Ultralytics (YOLO)
-- OpenCV
-- NumPy / Pandas
-- YAML/JSON-конфигурации для сценариев запуска
-
-## Быстрый старт
-
-1. Установить зависимости:
+Minimal runtime dependencies:
 
 ```bash
 pip install -r requirements-pipeline.txt
 ```
 
-2. Подготовить конфиг (например, `config.example.yaml`).
-3. Запустить пайплайн.
+`requirements.txt` in the repository root may represent a broader frozen environment (notebooks, dev tools). For reproducing the monitoring pipeline alone, prefer `requirements-pipeline.txt`.
 
-### Пример команды запуска
+## Model weights
 
-```bash
-python main.py --config config.example.yaml --source rtsp://user:pass@camera-ip:554/stream1 --no-preview
-```
+Large checkpoints are **not** committed here. After cloning, install weights to the paths expected by your YAML / defaults (see `models/README.md` and `ppe_monitoring/config.py`), for example:
 
-Дополнительные примеры:
+- `models/hardhat_detection_yolo11_200_epochs_best_02032025.pt` — main detector.
+- `yolov8s.pt` — person fallback (often auto-downloaded by Ultralytics when missing).
 
-```bash
-python main.py --source input_files/hardhat_input_video.mp4
-python main.py --source 0
-```
+| Artifact | Purpose | Expected location | Distribution |
+| --- | --- | --- | --- |
+| Main PPE detector | `person` / `head` / `hardhat` (+ optional `vest`) | `models/*.pt` per config | `<GOOGLE_DRIVE_LINK_TO_MODELS>` |
+| Person fallback | COCO-style person detector | `yolov8s.pt` (repo root by default) | Ultralytics hub or same bundle as above |
 
-## Конфигурация
+## Data layout
 
-Ключевые группы параметров:
+1. Put input videos where your manifest points (commonly `input_files/` or `data/videos/`).
+2. Add a manifest CSV `video_id,source_path,split` (see `examples/video_manifest_one.csv`).
+3. Add GT event CSVs under `data/gt_events/` following `docs/gt_event_format.md` (`examples/sample_gt_events.csv`).
 
-| Группа | Назначение |
-| --- | --- |
-| `pipeline.*` | Источник, частота обработки, режим работы |
-| `motion.*` | Порог и гистерезис motion gating |
-| `roi.*` | Ограничение рабочей зоны анализа |
-| `model.*` | Веса, параметры инференса, backend |
-| `event_logic.*` | Temporal-порог, подтверждение события, cooldown |
-| `output.*` | Каталоги и флаги экспорта артефактов |
+## Running the pipeline
 
-Готовые шаблоны:
-- `config.example.yaml`
-- `config.demo_slow.example.yaml`
-- `config.ppe_with_vest.example.yaml`
-- `config.helmet_vest_repo.example.yaml`
-
-## Выходные артефакты
-
-После выполнения формируются:
-
-- `output_files/processed.mp4`
-- `output_files/events.csv`
-- `output_files/events.jsonl`
-- `output_files/frame_metrics.csv`
-- `output_files/runtime_profile.json`
-
-### Пример структуры выходных файлов
-
-```text
-output_files/
-  processed.mp4
-  events.csv
-  events.jsonl
-  frame_metrics.csv
-  runtime_profile.json
-```
-
-`events.csv` / `events.jsonl` содержат события `no_hardhat` и, при включенном классе, `no_vest`.  
-Эти записи могут напрямую использоваться внешними системами оповещения (SCADA/MES/шлюзы уведомлений) как входной поток событий.
-
-## Экспериментальная оценка
-
-Проект поддерживает воспроизводимые эксперименты по качеству и производительности:
-
-- абляционные прогоны (`tools/run_ablation.py`);
-- повторные latency-замеры (`tools/run_e2_latency_repeats.py`);
-- отчетные артефакты по метрикам в `output_files/experiments/...`.
-
-Для корректной E2-оценки используется протокол из `docs/e2_evaluation_protocol.md`.
-
-## Ограничения
-
-- Качество зависит от домена камеры, ракурса, освещения и корректности ROI.
-- `no_vest` доступно только при наличии класса `vest` в используемой модели/алиасах.
-- При экстремально плотных сценах возможны ошибки ассоциации при перекрытиях.
-- RTSP-источники зависят от стабильности сети и параметров кодека.
-
-## Планы развития
-
-- Улучшение устойчивости трекинга в плотных и быстро меняющихся сценах.
-- Расширение набора событий СИЗ и правил контекстной валидации.
-- Стандартизированные адаптеры экспорта событий в внешние очереди/шины.
-- Автоматизированные регрессионные бенчмарки производительности в CI.
-
-## Проверки
-
-Базовый запуск тестов:
+Single file or stream (override `pipeline.source` from the CLI):
 
 ```bash
-python -m unittest discover -s tests -v
+python main.py --config config.example.yaml --source input_files/hardhat_input_video4.mp4 --no-preview
 ```
 
-Расширенные инструкции и материалы:
-- `docs/architecture.md`
-- `docs/e2_evaluation_protocol.md`
-- `docs/train_vest_model.md`
+RTSP example:
 
+```bash
+python main.py --config config.example.yaml --source rtsp://user:password@host:554/stream --no-preview
+```
+
+Batch directory (one output folder per input video stem under `--batch-output-root`):
+
+```bash
+python main.py --config configs/proposed.yaml --batch-videos-dir input_files --batch-output-root output_files/batch_demo --no-preview
+```
+
+CLI reference:
+
+```bash
+python main.py --help
+```
+
+## Evaluation
+
+After producing runs under `output_files/experiments/<run_group>/…`:
+
+```bash
+python tools/eval_events.py --run-group <run_group> --experiments-root output_files/experiments --gt-dir data/gt_events --tolerance-frames 0
+```
+
+Metrics are described in [`docs/evaluation.md`](docs/evaluation.md): TP/FP/FN, precision, recall, F1, false alarms per hour, and detection delay statistics where applicable.
+
+## Experiments
+
+- **Baseline** — naive frame-sampled configuration without motion gating, ROI, or rich temporal logic (`configs/baseline.yaml`).
+- **Proposed** — video-first configuration with motion gating, ROI, temporal event logic, and optional fallback (`configs/proposed.yaml`).
+- **Ablations** — `configs/ablation_proposed_without_*.yaml` disable one factor at a time (motion, ROI, temporal logic, person fallback).
+
+Protocol details: [`docs/experiments.md`](docs/experiments.md), [`docs/ablation_protocol.md`](docs/ablation_protocol.md), [`docs/e2_evaluation_protocol.md`](docs/e2_evaluation_protocol.md).
+
+## Limitations
+
+- Detection quality depends on camera placement, lighting, resolution, and helmet pixel size.
+- Automated `no_hardhat` / `no_vest` events are **assistive signals** and require human review before operational or legal consequences.
+- The repository is an **engineering prototype**, not a certified safety system; production deployments need site-specific calibration, monitoring, and governance.
+- RTSP stability depends on network conditions and encoder settings.
+
+## External artifacts
+
+| Artifact | Purpose | Expected path after download | Suggested hosting |
+| --- | --- | --- | --- |
+| Trained PPE weights | Main inference | Under `models/` as referenced in config | `<GOOGLE_DRIVE_LINK_TO_MODELS>` |
+| Sample industrial clips | Demos / tuning | `data/videos/` or `input_files/` | `<GOOGLE_DRIVE_LINK_TO_SAMPLE_VIDEOS>` |
+| Full experiment run folders | Videos, logs, per-frame metrics | e.g. `output_files/experiments/<run_group>/` | `<GOOGLE_DRIVE_LINK_TO_FULL_EXPERIMENTS>` or GitHub Release / Git LFS |
+
+## License
+
+This project is licensed under the **Apache License 2.0** — see [`LICENSE`](LICENSE).
+
+## Repository hygiene
+
+See [`CLEANUP_REPORT.md`](CLEANUP_REPORT.md) for the public-readiness audit (removed paths, `.gitignore` policy, and verification commands).

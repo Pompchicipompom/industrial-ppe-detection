@@ -117,11 +117,11 @@ Outputs are written under:
 
 ### 5.1 Manifest and GT (E2)
 
-- `tools/run_ablation.py` defaults to `--manifest data/video_manifest_e1.csv` (VKR E2 round). Do not point E2 at `data/video_manifest.csv` unless you maintain a matching GT directory: `video_id` values differ from `gt_events_e1.csv` (see `docs/e2_evaluation_protocol.md`).
+- `tools/run_ablation.py` defaults to `--manifest data/video_manifest_e1.csv` (E2-style manifest with splits). Do not point E2 at `data/video_manifest.csv` unless you maintain a matching GT directory: `video_id` values differ from `gt_events_e1.csv` (see `docs/e2_evaluation_protocol.md`).
 
 ### 5.2 Device and backend
 
-All six YAML presets set `model.auto_backend_resolve: false`, `backend_priority: ["pt"]`, and `model.device: "cpu"` so latency ablations use a single explicit inference stack (PyTorch `.pt`, CPU). For faster runs on one fixed GPU, set `device: "0"` consistently and document it in the thesis; do not toggle per config mid-study.
+All six YAML presets set `model.auto_backend_resolve: false`, `backend_priority: ["pt"]`, and `model.device: "cpu"` so latency ablations use a single explicit inference stack (PyTorch `.pt`, CPU). For faster runs on one fixed GPU, set `device: "0"` consistently and document it in the experiment notes; do not toggle per config mid-study.
 
 ### 5.3 Preflight (before experiments)
 

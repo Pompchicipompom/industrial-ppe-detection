@@ -1,4 +1,4 @@
-# Baseline preset for VKR comparisons.
+# Baseline preset for ablation / baseline-vs-proposed comparisons.
 # Naive frame-first style: every frame sampled, no motion gate, no ROI, no temporal smoothing.
 # Person fallback is ON so baseline-vs-proposed deltas isolate motion/ROI/temporal (not detector stack).
 
@@ -19,7 +19,7 @@ model:
   imgsz: 640
   roi_imgsz: 320
   use_half: true
-  # E2 / VKR: fixed inference stack for comparable latency (no auto OpenVINO/ONNX). Use device "0" on CUDA.
+  # E2: fixed inference stack for comparable latency (no auto OpenVINO/ONNX). Use device "0" on CUDA.
   auto_backend_resolve: false
   backend_priority: ["pt"]
   device: "cpu"

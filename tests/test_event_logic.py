@@ -27,6 +27,7 @@ class TestTemporalEventLogic(unittest.TestCase):
         _, events1, active1, violating1 = logic.update(
             person_boxes=person_boxes,
             person_hardhat_observed={101: False},
+            person_vest_observed={101: True},
             frame_idx=1,
             timestamp_sec=0.0,
             did_infer=True,
@@ -34,6 +35,7 @@ class TestTemporalEventLogic(unittest.TestCase):
         _, events2, active2, violating2 = logic.update(
             person_boxes=person_boxes,
             person_hardhat_observed={101: False},
+            person_vest_observed={101: True},
             frame_idx=2,
             timestamp_sec=0.3,
             did_infer=True,
@@ -49,6 +51,7 @@ class TestTemporalEventLogic(unittest.TestCase):
         _, events3, active3, violating3 = logic.update(
             person_boxes=person_boxes,
             person_hardhat_observed={101: False},
+            person_vest_observed={101: True},
             frame_idx=3,
             timestamp_sec=0.7,
             did_infer=True,
@@ -62,6 +65,7 @@ class TestTemporalEventLogic(unittest.TestCase):
         _, events4, _, _ = logic.update(
             person_boxes=person_boxes,
             person_hardhat_observed={101: False},
+            person_vest_observed={101: True},
             frame_idx=4,
             timestamp_sec=1.0,
             did_infer=True,
@@ -72,6 +76,7 @@ class TestTemporalEventLogic(unittest.TestCase):
         _, events5, _, _ = logic.update(
             person_boxes=person_boxes,
             person_hardhat_observed={101: False},
+            person_vest_observed={101: True},
             frame_idx=15,
             timestamp_sec=3.2,
             did_infer=True,
@@ -86,16 +91,18 @@ class TestTemporalEventLogic(unittest.TestCase):
         statuses1, events1, _, _ = logic.update(
             person_boxes=person_boxes,
             person_hardhat_observed={7: True},
+            person_vest_observed={7: True},
             frame_idx=1,
             timestamp_sec=0.0,
             did_infer=True,
         )
-        self.assertFalse(statuses1[7])
+        self.assertTrue(statuses1[7])
         self.assertEqual(len(events1), 0)
 
         statuses2, _, _, _ = logic.update(
             person_boxes=person_boxes,
             person_hardhat_observed={7: True},
+            person_vest_observed={7: True},
             frame_idx=2,
             timestamp_sec=0.1,
             did_infer=True,
@@ -106,6 +113,7 @@ class TestTemporalEventLogic(unittest.TestCase):
         statuses3, _, _, _ = logic.update(
             person_boxes=person_boxes,
             person_hardhat_observed={7: False},
+            person_vest_observed={7: True},
             frame_idx=3,
             timestamp_sec=0.2,
             did_infer=True,

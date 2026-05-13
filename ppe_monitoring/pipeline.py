@@ -300,6 +300,31 @@ def _binary_hardhat_observed_by_person(
     return observed
 
 
+def _vest_observed_by_person(
+    detections: list[Detection],
+    person_boxes: dict[int, tuple[float, float, float, float]],
+) -> dict[int, bool]:
+    observed = {person_id: False for person_id in person_boxes}
+    if not person_boxes:
+        return observed
+    for det in detections:
+        if det.cls_name != "vest":
+            continue
+        owner_id = det.owner_person_id if det.owner_person_id in person_boxes else None
+        if owner_id is None:
+            x1, y1, x2, y2 = det.bbox_xyxy
+            cx = (x1 + x2) / 2.0
+            cy = (y1 + y2) / 2.0
+            for person_id, (px1, py1, px2, py2) in person_boxes.items():
+                if px1 <= cx <= px2 and py1 <= cy <= py2:
+                    owner_id = person_id
+                    break
+        if owner_id is None:
+            continue
+        observed[owner_id] = True
+    return observed
+
+
 class PipelineRunner:
     """Single end-to-end pipeline execution (video in → inference → events → artifacts out)."""
 
@@ -384,6 +409,7 @@ def _run_pipeline_inner(cfg: dict) -> dict:
     head_detection_total = 0
     person_tracks_total_accum = 0
     unique_hardhat_person_ids: set[int] = set()
+    unique_vest_person_ids: set[int] = set()
     skipped_stale_visual_bbox = 0
     person_confirm_mode = resolve_person_confirmation_mode(cfg["filters"])
     person_infer_hits: dict[int, int] = {}
@@ -441,6 +467,7 @@ def _run_pipeline_inner(cfg: dict) -> dict:
             person_boxes_for_events: dict[int, tuple[float, float, float, float]] = {}
             confirmed_ids_for_draw: set[int] = set()
             person_hardhat_observed: dict[int, bool] = {}
+            person_vest_observed: dict[int, bool] = {}
             accepted_heads = []
             accepted_hardhats = []
             roi_stage_enabled = bool(roi_cfg.get("enabled", True)) and bool(
@@ -497,12 +524,19 @@ def _run_pipeline_inner(cfg: dict) -> dict:
                     if len(accepted_hardhats) > 0:
                         hardhat_detection_frames += 1
                     tracking_ms += (time.perf_counter() - t_track_assoc_start) * 1000.0
+                person_vest_observed = _vest_observed_by_person(detections, person_boxes)
+                for pid, observed in person_vest_observed.items():
+                    if observed:
+                        unique_vest_person_ids.add(pid)
                 tracker.register_headlike_support(person_boxes, accepted_heads, accepted_hardhats)
                 valid_person_ids = tracker.get_valid_person_ids(person_boxes)
                 if valid_person_ids:
                     person_boxes = {pid: box for pid, box in person_boxes.items() if pid in valid_person_ids}
                     person_hardhat_observed = {
                         pid: person_hardhat_observed.get(pid, False) for pid in person_boxes
+                    }
+                    person_vest_observed = {
+                        pid: person_vest_observed.get(pid, False) for pid in person_boxes
                     }
                 last_infer_frame = frame_idx
 
@@ -598,6 +632,7 @@ def _run_pipeline_inner(cfg: dict) -> dict:
                 else:
                     person_boxes = {}
                 person_hardhat_observed = {person_id: False for person_id in person_boxes}
+                person_vest_observed = {person_id: False for person_id in person_boxes}
                 tracking_ms += (time.perf_counter() - t_track_reuse_start) * 1000.0
                 if person_confirm_mode == "hard":
                     person_boxes = {
@@ -606,6 +641,7 @@ def _run_pipeline_inner(cfg: dict) -> dict:
                         if pid in last_confirmed_person_ids
                     }
                     person_hardhat_observed = {person_id: False for person_id in person_boxes}
+                    person_vest_observed = {person_id: False for person_id in person_boxes}
                     confirmed_ids_for_draw = set(person_boxes.keys())
                     person_boxes_for_events = dict(person_boxes)
                 elif person_confirm_mode == "soft":
@@ -622,11 +658,15 @@ def _run_pipeline_inner(cfg: dict) -> dict:
                 for pid in person_boxes_for_events
                 if pid in person_hardhat_observed
             }
+            person_vest_for_events = {
+                pid: person_vest_observed[pid] for pid in person_boxes_for_events if pid in person_vest_observed
+            }
 
             t_event_logic_start = time.perf_counter()
             statuses, events, active_violations, violating_person_ids = event_logic.update(
                 person_boxes=person_boxes_for_events,
                 person_hardhat_observed=person_hardhat_for_events,
+                person_vest_observed=person_vest_for_events,
                 frame_idx=frame_idx,
                 timestamp_sec=timestamp_sec,
                 did_infer=should_infer,
@@ -790,8 +830,11 @@ def _run_pipeline_inner(cfg: dict) -> dict:
             "hardhat_detection_frames": int(hardhat_detection_frames),
             "hardhat_detection_total": int(hardhat_detection_total),
             "unique_with_hardhat_persons_total": int(len(unique_hardhat_person_ids)),
+            "unique_with_vest_persons_total": int(len(unique_vest_person_ids)),
             "active_no_hardhat_persons_now": int(len(event_logic.active_no_hardhat_persons)),
             "unique_no_hardhat_persons_total": int(len(event_logic.unique_no_hardhat_persons)),
+            "active_no_vest_persons_now": int(len(event_logic.active_no_vest_persons)),
+            "unique_no_vest_persons_total": int(len(event_logic.unique_no_vest_persons)),
             "skipped_stale_visual_bbox": int(skipped_stale_visual_bbox),
             "person_filter_totals": debug_filter_totals,
         },
@@ -809,7 +852,11 @@ def _run_pipeline_inner(cfg: dict) -> dict:
 
     source.release()
     writer.release()
-    cv2.destroyAllWindows()
+    try:
+        cv2.destroyAllWindows()
+    except Exception:
+        # Some headless OpenCV builds do not implement GUI teardown calls.
+        pass
 
     print(f"Input source: {pipeline_cfg['source']}")
     print(f"Output video: {output_video_path}")

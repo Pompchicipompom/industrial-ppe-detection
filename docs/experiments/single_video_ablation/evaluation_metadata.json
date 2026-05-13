@@ -1,0 +1,12 @@
+{
+  "generated_at_utc": "2026-05-11T12:03:14.734469+00:00",
+  "run_group_dir": "(archived run group; original paths removed for public repo)",
+  "gt_dir": "data/gt_events",
+  "tolerance_frames": 0,
+  "config_filter": [],
+  "split_filter": [],
+  "per_video_metrics_csv": "docs/experiments/single_video_ablation/per_video_metrics.csv",
+  "aggregate_metrics_csv": "docs/experiments/single_video_ablation/aggregate_metrics.csv",
+  "baseline_vs_proposed_csv": "docs/experiments/single_video_ablation/baseline_vs_proposed.csv",
+  "note": "Snapshot of event-level evaluation for a single short clip (max_frames=500). Metrics are illustrative; see docs/experiments.md."
+}
