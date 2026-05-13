@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from urllib.parse import urlparse
 
 
@@ -38,6 +38,6 @@ def resolve_video_id(source_value, explicit_video_id: str | None) -> str:
             path_part = "stream"
         return sanitize_video_id(f"rtsp_{host}_{path_part}")
 
-    p = Path(source_str)
+    p = PureWindowsPath(source_str) if "\\" in source_str else Path(source_str)
     stem = p.stem if p.suffix else p.name
     return sanitize_video_id(stem)
