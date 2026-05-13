@@ -8,7 +8,7 @@
 
 В репозитории **нет** больших файлов (веса `.pt`, ролики `.mp4`). Чтобы запустить проект «с нуля», скачайте подготовленный пакет:
 
-**[→ Скачать с Google Drive](https://drive.google.com/drive/folders/ВСТАВЬТЕ_ID_ПАПКИ)**
+**[→ Скачать с Google Drive](https://drive.google.com/drive/folders/1YmBQYMUwpaXqmMdpY5acyaaalxJCVmNv)**
 
 После скачивания распакуйте содержимое в корень клона согласно разделу «Быстрый старт» ниже (или откройте `google_drive_bundle/README.md` в этом репозитории — там та же логика).
 
