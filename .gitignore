@@ -90,3 +90,7 @@ datasets/
 ~$*.docx
 ~WRL*.tmp
 hardhat-detection-yolov8/
+
+# Local pack for Google Drive / manual distribution (binaries stay untracked)
+google_drive_bundle/**
+!google_drive_bundle/README.md

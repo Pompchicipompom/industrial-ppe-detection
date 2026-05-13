@@ -1,134 +1,133 @@
-﻿# Video-based PPE compliance monitoring
+﻿# Видеоаналитика СИЗ: контроль каски на потоке
 
-Industrial-style **video-first** pipeline for hard-hat (and optional high-visibility vest) monitoring on file, camera, or RTSP sources. The system turns per-frame detections into **time-stabilised violation events** (`no_hardhat`, optionally `no_vest`) with CSV/JSONL exports and lightweight runtime profiling.
+Инженерный **video-first** пайплайн для промышленного видеонаблюдения: детекция человека / головы / каски, трекинг, временная логика событий и экспорт **`no_hardhat`** (и опционально **`no_vest`**) в `events.csv` / `events.jsonl` с профилированием производительности.
 
-## Features
+---
 
-- Video-first processing loop with configurable frame sampling.
-- Motion-based inference gating for fixed-camera scenes.
-- YOLO (Ultralytics) object detection with optional COCO-style **person fallback** detector.
-- Person tracking and association between `person`, `head`, `hardhat`, and optional `vest`.
-- Temporal event logic plus cooldown-style anti-spam for repeated alerts.
-- Structured logs: `events.csv`, `events.jsonl`, `frame_metrics.csv`, `runtime_profile.json`.
-- Event-level evaluation and ablation tooling (`tools/eval_events.py`, `tools/run_ablation.py`, `tools/run_experiments_extended.py`).
+## Скачать веса и демо-видео
 
-## Architecture
+В репозитории **нет** больших файлов (веса `.pt`, ролики `.mp4`). Чтобы запустить проект «с нуля», скачайте подготовленный пакет:
 
-High-level data path:
+**[→ Скачать с Google Drive](https://drive.google.com/drive/folders/ВСТАВЬТЕ_ID_ПАПКИ)**
 
-**video source → decode/resize → sampling + motion gate → (optional ROI) → YOLO + tracking → head/hardhat association → temporal event logic → annotated video + metrics/events.**
+После скачивания распакуйте содержимое в корень клона согласно разделу «Быстрый старт» ниже (или откройте `google_drive_bundle/README.md` в этом репозитории — там та же логика).
 
-Details and a module map: [`docs/architecture.md`](docs/architecture.md).
+---
 
-## Repository layout
+## Возможности
 
-| Path | Description |
+| Область | Что сделано |
 | --- | --- |
-| `main.py` | CLI entrypoint. |
-| `ppe_monitoring/` | Core pipeline, detector wrapper, tracker, motion, events, profiling, visualisation. |
-| `configs/` | YAML presets (`baseline`, `proposed`, ablations, extended demos). |
-| `tools/` | Ablation runner, evaluation, benchmarks, dataset helpers. |
-| `docs/` | Architecture, protocols, evaluation notes, archived small experiment tables. |
-| `examples/` | Sample config, manifest, and GT snippets. |
-| `models/` | Placeholder `README.md`; place large `.pt` weights locally (see below). |
-| `data/` | Placeholder `README.md`; place manifests and GT CSVs locally. |
+| Источник | Файл, камера, RTSP |
+| Детекция | `person`, `head`, `hardhat`, опционально `vest` |
+| Нагрузка | Сэмплинг по FPS, motion gating |
+| Контекст | ROI (в т.ч. авто) |
+| Трекинг | Стабильные `track_id`, ассоциация голова–каска |
+| События | Временная логика, cooldown от спама |
+| Наблюдаемость | FPS, задержки, `runtime_profile.json` |
+| Эксперименты | Абляции, event-level оценка (`tools/`) |
 
-Generated outputs should go under `output_files/` or another path configured in YAML — these directories are git-ignored by default.
+---
 
-## Requirements
+## Архитектура (кратко)
 
-- **Python 3.11** (aligned with project docs; slightly older 3.10+ may work with dependency pins adjusted locally).
-- A virtual environment is recommended.
+**Источник → препроцесс → сэмплинг / motion gate → YOLO + трекинг → ROI-проходы голова/каска → временная логика → события и метрики + аннотированное видео.**
 
-Minimal runtime dependencies:
+Подробнее: [`docs/architecture.md`](docs/architecture.md).
+
+---
+
+## Структура репозитория
+
+| Путь | Назначение |
+| --- | --- |
+| `main.py` | CLI |
+| `ppe_monitoring/` | Пайплайн, конфиг, детектор, трекер, motion, события, визуализация |
+| `configs/` | `baseline`, `proposed`, абляции |
+| `tools/` | `run_ablation.py`, `eval_events.py`, вспомогательные скрипты |
+| `docs/` | Архитектура, протоколы оценки, конфигурация |
+| `examples/` | Пример конфига, манифеста, GT |
+| `models/` | Сюда кладутся веса (см. `models/README.md`) |
+| `google_drive_bundle/` | **Локальная** сборка для выгрузки на Drive (см. README внутри; бинарники не в Git) |
+
+---
+
+## Требования
+
+- **Python 3.11** (рекомендуется; см. CI).
+- Виртуальное окружение.
 
 ```bash
+python -m venv .venv
+.venv\Scripts\activate
 pip install -r requirements-pipeline.txt
 ```
 
-`requirements.txt` in the repository root may represent a broader frozen environment (notebooks, dev tools). For reproducing the monitoring pipeline alone, prefer `requirements-pipeline.txt`.
+---
 
-## Model weights
+## Быстрый старт после скачивания с Drive
 
-Large checkpoints are **not** committed here. After cloning, install weights to the paths expected by your YAML / defaults (see `models/README.md` and `ppe_monitoring/config.py`), for example:
-
-- `models/hardhat_detection_yolo11_200_epochs_best_02032025.pt` — main detector.
-- `yolov8s.pt` — person fallback (often auto-downloaded by Ultralytics when missing).
-
-| Artifact | Purpose | Expected location | Distribution |
-| --- | --- | --- | --- |
-| Main PPE detector | `person` / `head` / `hardhat` (+ optional `vest`) | `models/*.pt` per config | `<GOOGLE_DRIVE_LINK_TO_MODELS>` |
-| Person fallback | COCO-style person detector | `yolov8s.pt` (repo root by default) | Ultralytics hub or same bundle as above |
-
-## Data layout
-
-1. Put input videos where your manifest points (commonly `input_files/` or `data/videos/`).
-2. Add a manifest CSV `video_id,source_path,split` (see `examples/video_manifest_one.csv`).
-3. Add GT event CSVs under `data/gt_events/` following `docs/gt_event_format.md` (`examples/sample_gt_events.csv`).
-
-## Running the pipeline
-
-Single file or stream (override `pipeline.source` from the CLI):
+1. Склонируйте репозиторий.
+2. Из архива с Drive скопируйте:
+   - `*.pt` из папки `models/` архива → в **`models/`** проекта;
+   - `yolov8s.pt` из корня архива → в **корень** проекта;
+   - `videos/hardhat_input_video.mp4` → в **`input_files/`** (или укажите свой путь).
+3. Запуск (короткий демо-прогон):
 
 ```bash
-python main.py --config config.example.yaml --source input_files/hardhat_input_video4.mp4 --no-preview
+python main.py --config config.example.yaml --source input_files/hardhat_input_video.mp4 --no-preview --max-frames 200
 ```
 
-RTSP example:
-
-```bash
-python main.py --config config.example.yaml --source rtsp://user:password@host:554/stream --no-preview
-```
-
-Batch directory (one output folder per input video stem under `--batch-output-root`):
-
-```bash
-python main.py --config configs/proposed.yaml --batch-videos-dir input_files --batch-output-root output_files/batch_demo --no-preview
-```
-
-CLI reference:
+Справка по аргументам:
 
 ```bash
 python main.py --help
 ```
 
-## Evaluation
+---
 
-After producing runs under `output_files/experiments/<run_group>/…`:
+## Оценка событий (event-level)
+
+После прогонов с `output_files/experiments/...`:
 
 ```bash
-python tools/eval_events.py --run-group <run_group> --experiments-root output_files/experiments --gt-dir data/gt_events --tolerance-frames 0
+python tools/eval_events.py --run-group <имя_группы> --experiments-root output_files/experiments --gt-dir data/gt_events --tolerance-frames 0
 ```
 
-Metrics are described in [`docs/evaluation.md`](docs/evaluation.md): TP/FP/FN, precision, recall, F1, false alarms per hour, and detection delay statistics where applicable.
+Метрики и форматы: [`docs/evaluation.md`](docs/evaluation.md), [`docs/e2_evaluation_protocol.md`](docs/e2_evaluation_protocol.md).
 
-## Experiments
+---
 
-- **Baseline** — naive frame-sampled configuration without motion gating, ROI, or rich temporal logic (`configs/baseline.yaml`).
-- **Proposed** — video-first configuration with motion gating, ROI, temporal event logic, and optional fallback (`configs/proposed.yaml`).
-- **Ablations** — `configs/ablation_proposed_without_*.yaml` disable one factor at a time (motion, ROI, temporal logic, person fallback).
+## Сбор пакета для Drive у себя на диске
 
-Protocol details: [`docs/experiments.md`](docs/experiments.md), [`docs/ablation_protocol.md`](docs/ablation_protocol.md), [`docs/e2_evaluation_protocol.md`](docs/e2_evaluation_protocol.md).
+В репозитории есть папка **`google_drive_bundle/`**: в неё можно скопировать веса и короткий ролик для ручной загрузки на Google Drive. Подробности — в [`google_drive_bundle/README.md`](google_drive_bundle/README.md).  
+Содержимое пакета (кроме `README.md`) **не коммитится** в Git.
 
-## Limitations
+---
 
-- Detection quality depends on camera placement, lighting, resolution, and helmet pixel size.
-- Automated `no_hardhat` / `no_vest` events are **assistive signals** and require human review before operational or legal consequences.
-- The repository is an **engineering prototype**, not a certified safety system; production deployments need site-specific calibration, monitoring, and governance.
-- RTSP stability depends on network conditions and encoder settings.
+## CI
 
-## External artifacts
+При каждом push в `master` / `main` запускаются установка зависимостей, smoke-import и `unittest`. Статус смотрите на вкладке **Actions** репозитория.
 
-| Artifact | Purpose | Expected path after download | Suggested hosting |
-| --- | --- | --- | --- |
-| Trained PPE weights | Main inference | Under `models/` as referenced in config | `<GOOGLE_DRIVE_LINK_TO_MODELS>` |
-| Sample industrial clips | Demos / tuning | `data/videos/` or `input_files/` | `<GOOGLE_DRIVE_LINK_TO_SAMPLE_VIDEOS>` |
-| Full experiment run folders | Videos, logs, per-frame metrics | e.g. `output_files/experiments/<run_group>/` | `<GOOGLE_DRIVE_LINK_TO_FULL_EXPERIMENTS>` or GitHub Release / Git LFS |
+---
 
-## License
+## Ограничения
 
-This project is licensed under the **Apache License 2.0** — see [`LICENSE`](LICENSE).
+- Качество зависит от камеры, освещения и размера каски в кадре.
+- События **`no_hardhat`** — вспомогательный сигнал; для операционных решений нужна человеческая проверка.
+- Проект позиционируется как **инженерный прототип**, а не сертифицированная система безопасности.
 
-## Repository hygiene
+---
 
-See [`CLEANUP_REPORT.md`](CLEANUP_REPORT.md) for the public-readiness audit (removed paths, `.gitignore` policy, and verification commands).
+## Лицензия
+
+Проект распространяется под **Apache License 2.0** — см. файл [`LICENSE`](LICENSE).
+
+---
+
+## Контакты и ссылки
+
+- Репозиторий: этот проект на GitHub.
+- Артефакты для запуска: **[Google Drive](https://drive.google.com/drive/folders/ВСТАВЬТЕ_ID_ПАПКИ)** (замените ссылку на свою папку или файл).
+
+После публикации ссылки обновите этот абзац и при необходимости `google_drive_bundle/README.md`.
