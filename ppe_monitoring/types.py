@@ -25,6 +25,7 @@ class ViolationEvent:
     event_type: str
     no_hardhat_streak: int
     no_hardhat_duration_sec: float
+    person_bbox: tuple[float, float, float, float] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)

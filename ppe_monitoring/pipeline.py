@@ -171,6 +171,11 @@ def _write_event(csv_writer, jsonl_file, event: ViolationEvent, video_id: str) -
         "schema_version": PRED_EVENT_SCHEMA_VERSION,
         **row,
     }
+    bbox = enriched.get("person_bbox")
+    if bbox is None:
+        bx1 = by1 = bx2 = by2 = ""
+    else:
+        bx1, by1, bx2, by2 = [f"{float(v):.2f}" for v in bbox]
     csv_writer.writerow(
         [
             enriched["video_id"],
@@ -182,9 +187,10 @@ def _write_event(csv_writer, jsonl_file, event: ViolationEvent, video_id: str) -
             enriched["event_type"],
             enriched["no_hardhat_streak"],
             f"{float(enriched['no_hardhat_duration_sec']):.3f}",
+            bx1, by1, bx2, by2,
         ]
     )
-    jsonl_file.write(json.dumps(enriched, ensure_ascii=False) + "\n")
+    jsonl_file.write(json.dumps(enriched, ensure_ascii=False, default=list) + "\n")
 
 
 def _write_profile_report(report_path: str, report: dict) -> None:

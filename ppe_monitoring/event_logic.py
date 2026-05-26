@@ -25,6 +25,11 @@ class TemporalEventLogic:
         self.max_no_vest_hold_frames_without_infer = int(
             event_cfg.get("max_no_vest_hold_frames_without_infer", 4)
         )
+        # Production-like: one alert per continuous violation episode per track (reset when violation ends).
+        self.one_event_per_active_episode = bool(event_cfg.get("one_event_per_active_episode", False))
+        self.one_vest_event_per_active_episode = bool(
+            event_cfg.get("one_vest_event_per_active_episode", self.one_event_per_active_episode)
+        )
 
         self.hardhat_confirmed = defaultdict(lambda: False)
         self.hardhat_positive_streak = defaultdict(int)
@@ -49,6 +54,8 @@ class TemporalEventLogic:
         self.last_vest_alert_ts = defaultdict(lambda: -10**9)
         self.active_no_vest_persons: set[int] = set()
         self.unique_no_vest_persons: set[int] = set()
+        self.no_hardhat_episode_emitted = defaultdict(lambda: False)
+        self.no_vest_episode_emitted = defaultdict(lambda: False)
 
     def update(
         self,
@@ -133,6 +140,8 @@ class TemporalEventLogic:
             elif (frame_idx - self.last_infer_frame.get(person_id, -10**9)) > self.max_no_hardhat_hold_frames_without_infer:
                 self.violation_active_state[person_id] = False
             no_hardhat_violation_active = bool(self.violation_active_state[person_id])
+            if not no_hardhat_violation_active:
+                self.no_hardhat_episode_emitted[person_id] = False
 
             if no_hardhat_violation_active:
                 violating_person_ids.add(person_id)
@@ -140,8 +149,12 @@ class TemporalEventLogic:
                 self.unique_no_hardhat_persons.add(person_id)
                 cooldown_by_frames = (frame_idx - self.last_alert_frame[person_id]) >= self.cooldown_frames
                 cooldown_by_time = (timestamp_sec - self.last_alert_ts[person_id]) >= self.cooldown_seconds
-                if cooldown_by_frames and cooldown_by_time:
+                may_emit = cooldown_by_frames and cooldown_by_time
+                if self.one_event_per_active_episode:
+                    may_emit = may_emit and not self.no_hardhat_episode_emitted[person_id]
+                if may_emit:
                     self.event_counter += 1
+                    pbox = person_boxes.get(person_id)
                     event = ViolationEvent(
                         event_id=self.event_counter,
                         frame_idx=frame_idx,
@@ -150,10 +163,13 @@ class TemporalEventLogic:
                         event_type="no_hardhat",
                         no_hardhat_streak=self.no_hardhat_streak[person_id],
                         no_hardhat_duration_sec=no_hardhat_duration,
+                        person_bbox=tuple(float(v) for v in pbox) if pbox is not None else None,
                     )
                     events.append(event)
                     self.last_alert_frame[person_id] = frame_idx
                     self.last_alert_ts[person_id] = timestamp_sec
+                    if self.one_event_per_active_episode:
+                        self.no_hardhat_episode_emitted[person_id] = True
 
             if did_infer:
                 vest_observed = bool(person_vest_observed.get(person_id, False))
@@ -170,14 +186,20 @@ class TemporalEventLogic:
             elif (frame_idx - self.last_infer_frame.get(person_id, -10**9)) > self.max_no_vest_hold_frames_without_infer:
                 self.vest_violation_active_state[person_id] = False
             no_vest_violation_active = bool(self.vest_violation_active_state[person_id])
+            if not no_vest_violation_active:
+                self.no_vest_episode_emitted[person_id] = False
             if no_vest_violation_active:
                 violating_person_ids.add(person_id)
                 violating_no_vest_ids.add(person_id)
                 self.unique_no_vest_persons.add(person_id)
                 cooldown_by_frames = (frame_idx - self.last_vest_alert_frame[person_id]) >= self.cooldown_frames
                 cooldown_by_time = (timestamp_sec - self.last_vest_alert_ts[person_id]) >= self.cooldown_seconds
-                if cooldown_by_frames and cooldown_by_time:
+                may_emit_vest = cooldown_by_frames and cooldown_by_time
+                if self.one_vest_event_per_active_episode:
+                    may_emit_vest = may_emit_vest and not self.no_vest_episode_emitted[person_id]
+                if may_emit_vest:
                     self.event_counter += 1
+                    pbox = person_boxes.get(person_id)
                     events.append(
                         ViolationEvent(
                             event_id=self.event_counter,
@@ -187,10 +209,13 @@ class TemporalEventLogic:
                             event_type="no_vest",
                             no_hardhat_streak=self.no_vest_streak[person_id],
                             no_hardhat_duration_sec=no_vest_duration,
+                            person_bbox=tuple(float(v) for v in pbox) if pbox is not None else None,
                         )
                     )
                     self.last_vest_alert_frame[person_id] = frame_idx
                     self.last_vest_alert_ts[person_id] = timestamp_sec
+                    if self.one_vest_event_per_active_episode:
+                        self.no_vest_episode_emitted[person_id] = True
 
         self.active_no_hardhat_persons = set(violating_no_hardhat_ids)
         self.active_no_vest_persons = set(violating_no_vest_ids)
@@ -226,3 +251,5 @@ class TemporalEventLogic:
             self.active_no_hardhat_persons.discard(person_id)
             self.active_no_vest_persons.discard(person_id)
             self.no_vest_streak.pop(person_id, None)
+            self.no_hardhat_episode_emitted.pop(person_id, None)
+            self.no_vest_episode_emitted.pop(person_id, None)

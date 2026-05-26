@@ -32,6 +32,7 @@ class PredEvent:
     frame_idx: int
     event_type: str
     timestamp_sec: float | None = None
+    person_track_id: int | None = None
 
 
 def utc_now_iso() -> str:
@@ -194,7 +195,22 @@ def read_pred_events(events_csv_path: Path) -> list[PredEvent]:
                     timestamp_sec = float(ts_raw)
                 except Exception:
                     timestamp_sec = None
-            preds.append(PredEvent(pred_idx=idx, frame_idx=frame_idx, event_type=event_type, timestamp_sec=timestamp_sec))
+            track_raw = (row.get("person_track_id") or "").strip()
+            person_track_id: int | None = None
+            if track_raw:
+                try:
+                    person_track_id = int(float(track_raw))
+                except Exception:
+                    person_track_id = None
+            preds.append(
+                PredEvent(
+                    pred_idx=idx,
+                    frame_idx=frame_idx,
+                    event_type=event_type,
+                    timestamp_sec=timestamp_sec,
+                    person_track_id=person_track_id,
+                )
+            )
     preds.sort(key=lambda x: (x.frame_idx, x.pred_idx))
     return preds
 

@@ -1,23 +1,28 @@
-# Model weights
+# Файлы весов моделей
 
-Detector checkpoints are **not** stored in this repository when they are large binary files.
+Веса детекторов не включены в репозиторий. После клонирования поместите
+их в этот каталог.
 
-## Expected paths (defaults)
+## Откуда взять веса
 
-Configured in `ppe_monitoring/config.py` and YAML presets:
+Веса распространяются отдельно через Google Drive:
 
-| Role | Default path |
+**[Открыть папку на Google Drive](https://drive.google.com/drive/folders/1YmBQYMUwpaXqmMdpY5acyaaalxJCVmNv)**
+
+В папке размещён архив `google_drive_bundle.rar`. После распаковки
+переместите `.pt`-файлы в этот каталог. Подробности по распаковке —
+в [главном README](../README.md#веса-моделей-и-демонстрационные-видео-google-drive).
+
+## Ожидаемые файлы
+
+| Имя файла | Назначение |
 | --- | --- |
-| Main PPE detector (`.pt`) | `models/hardhat_detection_yolo11_200_epochs_best_02032025.pt` |
-| Person fallback (COCO-style YOLO) | `yolov8s.pt` (repository root; Ultralytics may auto-download) |
-| Optional binary hardhat head model | `models/hardhat_binary_best.pt` |
+| `hardhat_detection_yolo11_200_epochs_best_02032025.pt` | основной hardhat-детектор |
+| `helmet_vest_repo_best.pt` | vest-детектор с прямым классом `NO-Safety Vest` |
+| `hardhat_binary_best.pt` *(опционально)* | бинарный hardhat-детектор |
 
-Adjust `model.weights_path`, `model.person_fallback_weights_path`, and related keys in your config to match the files you actually have.
+Если используются другие имена, поправьте `model.weights_path` в YAML.
 
-## Obtaining weights
+## Подробнее
 
-Provide archives separately (team drive, release asset, or Git LFS). Place files at the paths above **after** cloning.
-
-Placeholder links (replace with real distribution):
-
-- Models bundle: `<GOOGLE_DRIVE_LINK_TO_MODELS>`
+См. [../docs/model_files.md](../docs/model_files.md).

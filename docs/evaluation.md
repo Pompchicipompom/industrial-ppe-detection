@@ -1,39 +1,81 @@
-# Event-level evaluation
+# Методика оценки
 
-## Tooling
+## Единица оценки
 
-`tools/eval_events.py` matches predicted `no_hardhat` / `no_vest` events from pipeline outputs against ground-truth intervals.
+Оценка ведётся **на уровне событий**, а не на уровне кадров. Это
+соответствует целевому сценарию: оператор / журналируемая система
+работают именно с дискретными событиями нарушения, а не с поэлементной
+покадровой разметкой.
 
-Typical invocation (from repository root):
+## GT-событие
 
-```bash
-python tools/eval_events.py --run-group <run_group_name> --experiments-root output_files/experiments --gt-dir data/gt_events --tolerance-frames 0
-```
+Каждое GT-событие задано:
 
-- `--run-group` — either a directory name under `--experiments-root` or an absolute path to that directory.
-- Outputs are written under `<run_group>/evaluation/` (or `--output-subdir`): `per_video_metrics.csv`, `aggregate_metrics.csv`, `baseline_vs_proposed.csv`, `evaluation_metadata.json`.
+| Поле | Описание |
+| --- | --- |
+| `video_id` | идентификатор видео |
+| `event_id` | идентификатор события |
+| `violation_type` | тип нарушения (`no_hardhat`, `no_vest`) |
+| `start_frame` | первый кадр нарушения |
+| `end_frame` | последний кадр нарушения |
 
-## Ground truth format
+## Predicted event
 
-Per manifest `video_id`, provide a CSV (see `docs/gt_event_format.md`) with at least:
+Predicted event получается из pipeline и описывает фактическое
+срабатывание модели:
 
-`video_id`, `event_id`, `start_frame`, `end_frame`, `violation_type`
+| Поле | Описание |
+| --- | --- |
+| `video_id` | идентификатор видео |
+| `event_id` | сгенерированный идентификатор |
+| `frame_idx` | кадр срабатывания |
+| `timestamp_sec` | секунда срабатывания |
+| `person_track_id` | track_id нарушителя |
+| `event_type` | тип нарушения |
+| `person_x[1,2]` / `person_y[1,2]` | bbox человека в момент срабатывания |
 
-Optional columns: `zone_id`, `notes`.
+## Matching
 
-## Prediction format
+Соответствие GT ↔ predicted строится greedy:
 
-Predictions are read from each run’s `events.csv` / `events.jsonl` using columns compatible with `tools/eval_events.py` (see implementation for the exact schema used in your export).
+1. predicted event считается **TP**, если его `frame_idx` попадает в
+   окно `[start_frame, end_frame]` некоторого GT-события того же типа
+   и в том же видео, при этом GT-событие ещё не было покрыто другим
+   predicted.
+2. predicted event без подходящего GT — **FP**.
+3. GT-событие без подходящего predicted — **FN**.
 
-## Metrics
+Реализация: `tools/eval_events.py` (функции `match_events`, `calc_prf`).
 
-For each configuration and clip:
+## Метрики
 
-- **TP** — predicted event matches a GT interval within `tolerance_frames`.
-- **FP** — predicted event with no matching GT.
-- **FN** — GT interval with no matching prediction.
-- **Precision / recall / F1** — standard definitions from TP/FP/FN totals.
-- **False alarms per hour** — FP count normalised by evaluated wall-clock duration.
-- **Mean detection delay** — average temporal offset between prediction and GT start for TPs (when timestamps/frames allow).
+- **Precision** = TP / (TP + FP)
+- **Recall** = TP / (TP + FN)
+- **F1** = 2 · P · R / (P + R)
 
-See also `docs/event_evaluation_protocol.md` and `docs/e2_evaluation_protocol.md` for end-to-end experiment discipline.
+Дополнительно отслеживается `FP_neg` — число FP, выпавших на видео,
+размеченные как `negative` (без нарушений). Это даёт более узкую
+характеристику ложного срабатывания: ноль FP_neg означает, что система
+не шумит на «чистых» видео.
+
+## Почему TN не считается покадрово
+
+True Negative на уровне событий определить корректно нельзя:
+
+- кадров без нарушения в каждом видео большинство;
+- любое значение «кадровых TN» получит произвольно высокое значение
+  и сделает Specificity / Accuracy неинтерпретируемой.
+
+Вместо этого:
+
+- на положительных видео считаются TP / FP / FN;
+- на негативных видео отдельно учитывается `FP_neg`;
+- агрегаты считаются по всем видео когорты.
+
+## Ограничение пилотной выборки
+
+Текущие метрики получены на ручной пилотной выборке (≈ 30 hardhat и
+≈ 38 vest видео). Выборка покрывает несколько типовых сценариев
+видеонаблюдения (производство, склад, площадки), но не претендует на
+полную репрезентативность доменов. Для других условий съёмки требуется
+повторная разметка и оценка.

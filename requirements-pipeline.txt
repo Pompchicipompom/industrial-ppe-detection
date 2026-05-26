@@ -1,8 +1,0 @@
-# Minimal runtime for main.py PPE pipeline (CPU-friendly pins; adjust torch for your CUDA).
-numpy>=1.26,<3
-opencv-python>=4.9
-PyYAML>=6.0
-ultralytics>=8.3
-# CPU torch; for CUDA follow https://pytorch.org/get-started/locally/
-torch>=2.2
-torchvision>=0.17

@@ -1,40 +1,105 @@
-# Pipeline architecture (video-first PPE)
+# Архитектура pipeline
 
-Single-process frame loop: **VideoSource** → resize → **MotionDetector** + **FrameSampler** + **InferenceGate** → (optional) **PPEDetector** main YOLO `track` + person fallback → **PersonTracker** → ROI head/hardhat passes → **TemporalEventLogic** → draw → **VideoWriter** + CSV/JSONL metrics.
+Pipeline собран из независимых модулей, каждый из которых имеет
+ограниченную зону ответственности. Это позволяет заменять отдельные
+блоки (например, детектор) без переписывания остальной логики.
 
-## ASCII diagram
+## Общая схема
 
-```text
-+------------------+      +----------------+      +-------------------+
-| Video/RTSP Input | ---> | Frame Sampler  | ---> | Motion Gate (fixed|
-| (cv2.VideoCapture)|     | (target FPS)   |      | camera assumption) |
-+------------------+      +----------------+      +---------+---------+
-                                                           |
-                                                           v
-                                                  +--------+--------+
-                                                  | YOLO Inference  |
-                                                  | (track + person |
-                                                  | fallback + ROI) |
-                                                  +--------+--------+
-                                                           |
-                                                           v
-+------------------+      +----------------+      +-------------------+
-| Video Writer     | <--- | Visualization  | <--- | Tracker + Temporal|
-| (annotated out)  |      | (optional ROI) |      | Logic + Events    |
-+------------------+      +----------------+      +----+---------+----+
-                                                        |         |
-                                                        v         v
-                                                events.csv/jsonl  frame_metrics.csv
+```
+видео (файл / RTSP)
+       │
+       ▼
+[1] FrameSampler            ─ выбор кадров (motion-gated + force-N)
+       │
+       ▼
+[2] PPEDetector             ─ YOLO-инференс: person / head / hardhat /
+                              vest / no_vest
+       │
+       ▼
+[3] PersonTracker           ─ присвоение и поддержка track_id людей
+       │
+       ▼
+[4] Person confirmation     ─ фильтрация ложных person-боксов
+                              (через head / hardhat-присутствие)
+       │
+       ▼
+[5] PPE association         ─ привязка СИЗ к конкретному человеку
+                              (hardhat ↔ head, vest ↔ torso)
+       │
+       ▼
+[6] TemporalEventLogic      ─ подтверждение нарушения во времени,
+                              cooldown, лок состояния
+       │
+       ▼
+[7] events.csv              ─ сырые события до консолидации
+       │
+       ▼
+[8] EventConsolidatorV3     ─ объединение дубликатов одного эпизода
+                              (track-switch, temporal hold)
+       │
+       ▼
+consolidated_events.csv     +   processed.mp4
 ```
 
-## Rationale
+## Описание модулей
 
-1. Sampling + motion gate reduce inference load while staying responsive on fixed cameras.
-2. Temporal logic + cooldown turn per-frame detections into stable violation events.
-3. Profiling (processing vs inference FPS, latency percentiles) supports deployment validation.
+| Модуль | Назначение |
+| --- | --- |
+| `ppe_monitoring/motion.py` | детектор движения, гейт инференса, семплер кадров |
+| `ppe_monitoring/detector.py` | обёртка над YOLO с нормализацией классов и ROI-инференсом |
+| `ppe_monitoring/tracker.py` | IoU-tracker для людей, поддержка переноса треков при кратковременных пропусках |
+| `ppe_monitoring/person_confirmation.py` | мягкое подтверждение person по head/hardhat |
+| `ppe_monitoring/person_head_confirmation.py` | проверка наличия головы / каски в области person |
+| `ppe_monitoring/event_logic.py` | покадровая временная логика nohardhat / no_vest, cooldown |
+| `ppe_monitoring/event_consolidator.py` | `EventConsolidatorV3` — пост-обработка raw-событий |
+| `ppe_monitoring/visualization.py` | отрисовка bbox, статусов, плашек, поддержка кириллицы (PIL) |
+| `ppe_monitoring/profiler.py` | замеры времени по стадиям loop'а |
+| `ppe_monitoring/rtsp_health.py` | watchdog переподключений RTSP |
+| `ppe_monitoring/geometry.py` | вспомогательная геометрия (ROI, IoU и т.п.) |
+| `ppe_monitoring/types.py` | dataclass-структуры детекций и событий |
+| `ppe_monitoring/config.py` | загрузка YAML-конфига и слияние со значениями по умолчанию |
+| `ppe_monitoring/pipeline.py` | связующий runner: вход видео → выход events / processed.mp4 |
+| `main.py` | CLI, вызывающий pipeline и применяющий `EventConsolidatorV3` |
+| `tools/consolidate_events.py` | отдельная утилита пост-обработки готового events.csv |
+| `tools/eval_events.py` | event-level evaluator (Precision / Recall / F1) |
 
-## Code map
+## Почему система не фиксирует нарушение по одному кадру
 
-- Entry: [main.py](../main.py) → [ppe_monitoring/pipeline.py](../ppe_monitoring/pipeline.py) `run_pipeline` / `PipelineRunner`
-- Config: [ppe_monitoring/config.py](../ppe_monitoring/config.py)
-- Metrics column contract: [ppe_monitoring/metrics_constants.py](../ppe_monitoring/metrics_constants.py)
+Покадровая детекция шумна. Ложные срабатывания возникают на:
+
+- кратковременных артефактах детектора (например, «голова» вместо каски
+  при низком разрешении);
+- частичных перекрытиях людей и объектов;
+- бликах, движении камеры, низком освещении.
+
+Поэтому событие формируется только после устойчивого подтверждения по
+треку человека: одновременно проверяются количество кадров подряд без
+СИЗ и общая длительность нарушения в секундах. Это снижает Precision
+шум без существенной потери Recall на длинных нарушениях.
+
+## Почему нужна привязка СИЗ к человеку
+
+Без привязки к конкретному человеку система не может корректно ответить
+на вопрос «кто нарушитель». В сцене может одновременно присутствовать
+несколько работников, у части из которых каска есть, а у части — нет.
+Привязка bbox каски / жилета к области головы / торса конкретного
+person-трека позволяет:
+
+- разделять состояния разных людей,
+- не считать наличие каски у соседа как «у всех всё в порядке»,
+- формировать события по конкретному track_id.
+
+## Почему нужен `EventConsolidatorV3`
+
+Временная логика работает покадрово и иногда выдаёт несколько raw-событий
+для одного физического эпизода нарушения. Это происходит при:
+
+- смене track_id (occlusion, выход из кадра и возврат);
+- кратковременных пропусках детекции;
+- многократном пересечении порога подтверждения.
+
+`EventConsolidatorV3` объединяет такие raw-события в один итоговый
+эпизод по принципу: одно и то же событие во времени и в пространстве —
+одно событие. Реализация устойчива к смене track_id (используется
+история bbox-якорей вместо одного «жёсткого» центра).

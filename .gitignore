@@ -1,96 +1,62 @@
 # Python
 __pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
+*.pyc
+*.pyo
+*.pyd
 *.egg-info/
-.eggs/
-dist/
 build/
-.pytest_cache/
-.mypy_cache/
-.ruff_cache/
-.ipynb_checkpoints/
+dist/
 
-# Virtual environments
+# Виртуальные окружения
 .venv/
 venv/
-ENV/
+env/
 
-# Secrets / local env
+# Секреты
 .env
-.env.*
-!.env.example
+*.env
 
-# IDE / OS
-.idea/
-.vscode/
-*.swp
-*~
-.DS_Store
-Thumbs.db
+# Веса моделей и бинарники
+*.pt
+*.onnx
+*.engine
+*.bin
+*.xml
+*.tflite
+*.pb
 
-# Logs and temp
-*.log
-*.tmp
-*.bak
-tmp/
-kernel.errors.txt
-
-# Large / local artifacts (keep small docs under docs/figures if needed)
-outputs/
-output/
-output_files/
-runs/
-results/
-experiments/**/processed*.mp4
-experiments/**/processed.mp4
-wandb/
-mlruns/
-
-# Archives
-*.rar
-*.zip
-*.7z
-
-# Media (place samples via Git LFS or release if needed)
+# Видео и архивы
 *.mp4
 *.avi
 *.mov
 *.mkv
-!docs/figures/**/*.png
-!docs/figures/**/*.jpg
-!docs/figures/**/*.jpeg
-!docs/figures/**/*.svg
+*.webm
+*.zip
+*.rar
+*.7z
+*.tar
+*.tar.gz
 
-# Models / export formats
-*.pt
-*.pth
-*.onnx
-*.engine
-*.blob
-*.xml
-*.bin
+# Локальные данные
+input/
+output/
+runs/
+datasets/
+data/
+
+# Веса (но оставляем README в models/)
 models/*
 !models/README.md
+!models/.gitkeep
 
-# Data directories (README only in repo)
-/data/**
-!/data/README.md
-!/data/**/README.md
+# Логи
+*.log
+*.tmp
 
-# Local datasets
-datasets/
-
-# Root-level downloaded weights (Ultralytics auto-download)
-/yolov8*.pt
-
-# Legacy / tooling noise
-~$*.docx
-~WRL*.tmp
-hardhat-detection-yolov8/
-
-# Local pack for Google Drive / manual distribution (binaries stay untracked)
-google_drive_bundle/**
-!google_drive_bundle/README.md
+# IDE / системные
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+.pytest_cache/
+.ipynb_checkpoints/

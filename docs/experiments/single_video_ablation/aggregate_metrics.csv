@@ -1,7 +1,0 @@
-﻿run_group,config_name,eval_status,videos_total,videos_evaluated,videos_skipped,gt_total,pred_total,tp_total,fp_total,fn_total,precision,recall,f1,duration_sec_total,false_alarms_per_hour,mean_detection_delay_sec
-one_video_e2,baseline,evaluated,1,1,0,1,210,1,209,0,0.004762,1.000000,0.009479,6.640000,113313.253012,0.560000
-one_video_e2,proposed,evaluated,2,2,0,2,6,0,6,2,0.000000,0.000000,0.000000,13.280000,1626.506024,
-one_video_e2,proposed_without_fallback,evaluated,2,2,0,2,4,0,4,2,0.000000,0.000000,0.000000,13.280000,1084.337349,
-one_video_e2,proposed_without_motion,evaluated,2,2,0,2,6,0,6,2,0.000000,0.000000,0.000000,13.280000,1626.506024,
-one_video_e2,proposed_without_roi,evaluated,2,2,0,2,4,0,4,2,0.000000,0.000000,0.000000,13.280000,1084.337349,
-one_video_e2,proposed_without_temporal,evaluated,2,2,0,2,216,2,214,0,0.009259,1.000000,0.018349,13.280000,58012.048193,0.760000

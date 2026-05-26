@@ -1,9 +1,0 @@
-# Optional dev/report stack on top of the pipeline runtime.
--r requirements-pipeline.txt
-
-matplotlib>=3.9.0
-pandas>=2.2.0
-ipykernel>=6.29.0
-jupyterlab>=4.1.0
-
-# For the historical full pinned export (Windows/CUDA/Jupyter stack) see requirements.txt
